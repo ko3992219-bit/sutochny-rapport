@@ -159,7 +159,8 @@ alert('Ответ OCR.space: '+JSON.stringify({
   OCRExitCode:data.OCRExitCode,
   ParsedResults:data.ParsedResults?.map(r=>({
     ParsedText:r.ParsedText,
-    Overlay:r.Overlay ? 'Есть' : 'Нет'
+    Overlay:r.Overlay ? 'Есть' : 'Нет',
+TextOverlay:r.TextOverlay ? 'Есть' : 'Нет'
   }))
 },null,2));
 
