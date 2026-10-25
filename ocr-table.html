@@ -1,1 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Суточный рапорт — проверка OCR</title>
+<style>
+body {font-family:Arial,sans-serif; margin:16px; background:#f4f6f8; color:#17212b}
+h2 {margin-bottom:8px}
+.panel {background:white;padding:16px;border-radius:12px;margin-bottom:14px}
+button,input {font-size:16px;margin:8px 0;padding:10px}
+button {background:#1769aa;color:white;border:0;border-radius:8px}
+table {border-collapse:collapse;width:100%;background:white}
+th,td {border:1px solid #ccd3da;padding:8px;min-width:90px}
+th {background:#e5edf5}
+td {background:#fff}
+td[contenteditable] {outline-color:#1769aa}
+.wrap {overflow-x:auto}
+small {color:#555}
+</style>
+</head>
+<body>
+<h2>Суточный рапорт</h2>
+<div class="panel">
+<p>Загрузите JSON-файл, полученный после распознавания на OCR.space.</p>
+<input type="file" id="file" accept=".json,application/json">
+<p><small>Данные обрабатываются на вашем устройстве и никуда не отправляются.</small></p>
+<p id="status">Ожидание файла</p>
+<button onclick="downloadCSV()">Скачать таблицу для Excel</button>
+</div>
+
+<div class="wrap">
+<table id="table">
+<thead><tr>
+<th>ЦП</th>
+<th>Номер чертежа</th>
+<th>Количество деталей</th>
+<th>Подпись кладовщика, дата</th>
+</tr></thead>
+<tbody></tbody>
+</table>
+</div>
+
+<script>
+const tbody = document.querySelector("#table tbody");
+const statusEl = document.getElementById("status");
+
+document.getElementById("file").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    const lines = data?.ParsedResults?.[0]?.Overlay?.Lines;
+    if (!Array.isArray(lines) || !lines.length) {
+      throw new Error("В JSON нет координат строк Overlay.Lines");
+    }
+
+    const words = [];
+    for (const line of lines) {
+      for (const w of line.Words || []) {
+        if (w.WordText && Number.isFinite(Number(w.Left))) {
+          words.push({
+            text: String(w.WordText),
+            x: Number(w.Left),
+            y: Number(w.Top),
+            h: Number(w.Height) || 20
+          });
+        }
+      }
+    }
+    if (!words.length) throw new Error("Нет распознанных слов");
+
+    words.sort((a,b) => a.y-b.y || a.x-b.x);
+    const medianHeight = [...words].map(w=>w.h)
+      .sort((a,b)=>a-b)[Math.floor(words.length/2)];
+    const tolerance = Math.max(10, Math.min(22, medianHeight * 0.65));
+
+    const rows = [];
+    for (const word of words) {
+      let row = rows.find(r => Math.abs(r.y-word.y) <= tolerance);
+      if (!row) {
+        row = {y:word.y, words:[]};
+        rows.push(row);
+      }
+      row.words.push(word);
+    }
+    rows.sort((a,b)=>a.y-b.y);
+    rows.forEach(r=>r.words.sort((a,b)=>a.x-b.x));
+
+    const header = rows.find(r =>
+      r.words.map(w=>w.text).join(" ").toLowerCase().includes("чертеж")
+    );
+    const startY = header ? header.y + tolerance : -Infinity;
+
+    tbody.innerHTML = "";
+    let count = 0;
+    for (const row of rows) {
+      if (row.y <= startY) continue;
+
+      const cols = [[],[],[],[]];
+      for (const w of row.words) {
+        const col = w.x < 310 ? 0 :
+                    w.x < 780 ? 1 :
+                    w.x < 1000 ? 2 : 3;
+        cols[col].push(w.text);
+      }
+
+      // Пропускаем пустые строки и заголовки.
+      if (!cols.some(c=>c.length)) continue;
+      if (cols.join(" ").toLowerCase().includes("чертеж")) continue;
+
+      const tr = document.createElement("tr");
+      for (const col of cols) {
+        const td = document.createElement("td");
+        td.contentEditable = "true";
+        td.textContent = col.join(" ");
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+      count++;
+    }
+    statusEl.textContent = "Загружено строк: " + count +
+      ". Проверьте данные и исправьте ошибки прямо в ячейках.";
+  } catch(err) {
+    statusEl.textContent = "Ошибка: " + err.message;
+  }
+});
+
+function downloadCSV() {
+  const rows = [...document.querySelectorAll("#table tr")].map(tr =>
+    [...tr.children].map(cell =>
+      '"' + cell.textContent.replace(/"/g,'""') + '"'
+    ).join(";")
+  );
+  if (rows.length < 2) {
+    alert("Сначала загрузите JSON-файл");
+    return;
+  }
+  const blob = new Blob(["\uFEFF" + rows.join("\r\n")],
+    {type:"text/csv;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "sutochny_rapport.csv";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+</script>
+</body>
+</html>
 
