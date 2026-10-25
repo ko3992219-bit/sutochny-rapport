@@ -1,1 +1,72 @@
 
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Суточный рапорт — проверка распознавания</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f3f6fa; color: #172536; }
+    main { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 14px; }
+    button, input { margin: 12px 0; }
+    button { padding: 12px; background: #1769aa; color: white; border: 0; border-radius: 8px; }
+    button:disabled { opacity: .5; }
+    img { max-width: 100%; max-height: 350px; }
+    textarea { width: 100%; box-sizing: border-box; min-height: 220px; padding: 10px; }
+  </style>
+</head>
+<body>
+<main>
+  <h2>Суточный рапорт</h2>
+  <p>Проверка настоящего распознавания фотографии</p>
+
+  <input id="photo" type="file" accept="image/*">
+  <img id="preview" alt="" hidden>
+
+  <p><button id="recognize" disabled>Распознать фотографию</button></p>
+  <p id="status">Выберите фотографию рапорта.</p>
+
+  <h3>Распознанный текст</h3>
+  <textarea id="result" placeholder="Здесь появится реальный результат распознавания. Его можно исправить."></textarea>
+  <p>Это тест. Программа не подставляет вымышленные цифры.</p>
+</main>
+
+<script>
+const photo = document.getElementById('photo');
+const preview = document.getElementById('preview');
+const button = document.getElementById('recognize');
+const status = document.getElementById('status');
+const result = document.getElementById('result');
+
+photo.addEventListener('change', () => {
+  const file = photo.files[0];
+  button.disabled = !file;
+  result.value = '';
+  if (file) {
+    preview.src = URL.createObjectURL(file);
+    preview.hidden = false;
+    status.textContent = 'Фотография выбрана.';
+  }
+});
+
+button.addEventListener('click', async () => {
+  if (!photo.files[0]) return;
+  button.disabled = true;
+  status.textContent = 'Распознавание выполняется. Подождите...';
+  try {
+    const worker = await Tesseract.createWorker('rus+eng');
+    const response = await worker.recognize(photo.files[0]);
+    result.value = response.data.text;
+    await worker.terminate();
+    status.textContent = 'Готово. Проверьте распознанный текст.';
+  } catch (error) {
+    status.textContent = 'Ошибка: ' + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
+
