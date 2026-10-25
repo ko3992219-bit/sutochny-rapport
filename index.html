@@ -58,6 +58,9 @@ small{color:#5d6b7e}
 </div>
 <img id="preview" alt="Выбранная фотография">
 <p id="photoStatus" class="muted">Фотография пока не выбрана.</p>
+ <button id="recognize" type="button">
+  🔍 Распознать фотографию
+</button>
 </section>
 <section class="panel">
 <h2>2. Загрузите результат OCR.space</h2>
@@ -112,6 +115,71 @@ function selectPhoto(e){
  preview.style.display='block';
  photoStatus.textContent='Фотография выбрана: '+file.name+'. Автоматическое распознавание ещё не подключено.';
 }
+ let selectedPhoto=null;
+
+document.getElementById('recognize').onclick=async()=>{
+ const key=document.getElementById('apiKey').value.trim();
+ const file=selectedPhoto;
+
+ if(!key){
+  alert('Введите API-ключ OCR.space');
+  return;
+ }
+ if(!file){
+  alert('Сначала выберите фотографию');
+  return;
+ }
+
+ const btn=document.getElementById('recognize');
+ btn.disabled=true;
+ btn.textContent='⏳ Распознаём фотографию...';
+
+ try{
+  const form=new FormData();
+  form.append('apikey',key);
+  form.append('file',file);
+  form.append('OCREngine','3');
+  form.append('isOverlayRequired','true');
+  form.append('language','auto');
+
+  const response=await fetch(
+   'https://api.ocr.space/parse/image',
+   {method:'POST',body:form}
+  );
+
+  if(!response.ok){
+   throw new Error('Ошибка сервера: '+response.status);
+  }
+
+  const data=await response.json();
+
+  if(data.IsErroredOnProcessing){
+   throw new Error(
+    JSON.stringify(data.ErrorMessage||'Ошибка распознавания')
+   );
+  }
+
+  const rows=parseOverlay(data);
+
+  showRows(
+   rows,
+   'Проверьте распознанные данные по фотографии.'
+  );
+
+  ocrStatus.textContent='Распознано строк: '+rows.length;
+  photoStatus.textContent='Распознавание завершено.';
+
+ }catch(err){
+  photoStatus.textContent='Ошибка: '+err.message;
+  alert(
+   'Распознавание не удалось. '+err.message+
+   '\nЕсли браузер блокирует запрос, потребуется сервер-посредник.'
+  );
+ }finally{
+  btn.disabled=false;
+  btn.textContent='🔍 Распознать фотографию';
+ }
+};
 document.getElementById('camera').addEventListener('change',selectPhoto);
 document.getElementById('gallery').addEventListener('change',selectPhoto);
 
@@ -202,6 +270,7 @@ function parseOverlay(data){
 document.getElementById('jsonFile').addEventListener('change',async e=>{
  const file=e.target.files?.[0];
  if(!file)return;
+ selectedPhoto=file;
  try{
   const data=JSON.parse(await file.text());
   const rows=parseOverlay(data);
