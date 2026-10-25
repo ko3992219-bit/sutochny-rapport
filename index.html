@@ -225,7 +225,7 @@ function showRows(rows,hint){
 }
 
 function parseOverlay(data){
- const lines=data?.ParsedResults?.[0]?.Overlay?.Lines;
+ const lines=data?.ParsedResults?.[0]?.TextOverlay?.Lines;
  if(!Array.isArray(lines)||!lines.length)
   throw new Error('В файле отсутствуют координаты Overlay.Lines. Нужен JSON с OCR.space Engine 3.');
 
