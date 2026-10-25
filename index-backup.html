@@ -1,1 +1,243 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Суточный рапорт</title>
+<style>
+:root{font-family:system-ui,Arial;color:#17263d;background:#f2f5fa}
+*{box-sizing:border-box}
+body{margin:0}
+header{background:#153c70;color:white;padding:20px 16px}
+main{max-width:850px;margin:auto;padding:16px}
+.panel{background:white;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 3px 16px #152b4712}
+h1{font-size:23px;margin:0 0 5px}
+h2{font-size:19px;margin:0 0 12px}
+p{line-height:1.5}
+.muted{color:#5d6b7e}
+.tag{display:inline-block;background:#fff0c2;color:#604900;padding:5px 9px;border-radius:9px;font-size:13px;font-weight:700}
+.buttons{display:grid;gap:9px}
+button,.filelabel{border:0;border-radius:10px;background:#1968d2;color:white;font-weight:700;font-size:16px;padding:14px;text-align:center;cursor:pointer;display:block;width:100%}
+.secondary{background:#e8f0fb;color:#174c88}
+.green{background:#14855b}
+input[type=file]{display:none}
+#preview{max-width:100%;max-height:360px;border-radius:10px;margin-top:12px;display:none}
+.tablewrap{overflow:auto}
+table{border-collapse:collapse;width:100%;min-width:620px}
+th,td{border-bottom:1px solid #dbe2ec;padding:7px;text-align:left}
+th{background:#eef3fa;font-size:13px}
+td input{width:100%;min-width:60px;border:1px solid #d4dce8;border-radius:6px;padding:9px;font-size:15px}
+.warn{background:#fff6d9;border-radius:10px;padding:12px;font-size:14px}
+.hidden{display:none}
+small{color:#5d6b7e}
+</style>
+</head>
+<body>
+<header>
+<h1>📋 Суточный рапорт</h1>
+<div>Подготовка данных для Excel и последующей загрузки в 1С</div>
+</header>
+<main>
+<div class="panel">
+<span class="tag">ТЕСТОВАЯ ВЕРСИЯ</span>
+<p class="muted">Фотографию можно выбрать или сделать на телефоне. Автоматическое распознавание ещё не подключено: пока результат OCR.space загружается отдельным JSON-файлом.</p>
+</div>
+<section class="panel">
+<h2>1. Добавьте фотографию</h2>
+<div class="buttons">
+<label class="filelabel" for="camera">📷 Сфотографировать рапорт</label>
+<input id="camera" type="file" accept="image/*" capture="environment">
+<label class="filelabel secondary" for="gallery">🖼️ Выбрать из галереи</label>
+<input id="gallery" type="file" accept="image/*">
+</div>
+<img id="preview" alt="Выбранная фотография">
+<p id="photoStatus" class="muted">Фотография пока не выбрана.</p>
+</section>
+<section class="panel">
+<h2>2. Загрузите результат OCR.space</h2>
+<p>Выберите JSON-файл с результатом распознавания (Engine 3). Он будет обработан прямо в браузере.</p>
+<label class="filelabel" for="jsonFile">📄 Выбрать JSON-файл</label>
+<input id="jsonFile" type="file" accept=".json,application/json">
+<p id="ocrStatus" class="muted" role="status">Ожидание JSON-файла.</p>
+<p><small>Секретный API-ключ на этой странице не используется и не хранится.</small></p>
+<button class="secondary" id="sample" type="button">Показать тестовый пример</button>
+</section>
+<section class="panel hidden" id="results">
+<h2>3. Проверьте и исправьте данные</h2>
+<p class="muted" id="resultsHint">Нажмите на ячейку, чтобы исправить значение. Обязательно сверьте данные с оригиналом.</p>
+<div class="tablewrap">
+<table>
+<thead><tr>
+<th>ЦП</th>
+<th>Номер чертежа</th>
+<th>Количество деталей</th>
+<th>Подпись кладовщика, дата</th>
+<th></th>
+</tr></thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+<div class="buttons" style="margin-top:12px">
+<button class="secondary" id="add" type="button">+ Добавить строку</button>
+<button class="green" id="export" type="button">⬇ Скачать CSV для Excel</button>
+</div>
+<p><small>Для прямой загрузки в 1С формат нужно согласовать со специалистом по 1С.</small></p>
+</section>
+<div class="panel">
+<h2>Для руководства</h2>
+<p>Цель проекта — заменить повторный ручной ввод проверкой электронных данных и последующей загрузкой в 1С. Точность распознавания и требования к защите документов необходимо оценить на реальных рапортах.</p>
+</div>
+</main>
+<script>
+'use strict';
+const preview=document.getElementById('preview');
+const photoStatus=document.getElementById('photoStatus');
+const tbody=document.getElementById('rows');
+const results=document.getElementById('results');
+const ocrStatus=document.getElementById('ocrStatus');
+let photoUrl=null;
 
+function selectPhoto(e){
+ const file=e.target.files?.[0];
+ if(!file)return;
+ if(photoUrl)URL.revokeObjectURL(photoUrl);
+ photoUrl=URL.createObjectURL(file);
+ preview.src=photoUrl;
+ preview.style.display='block';
+ photoStatus.textContent='Фотография выбрана: '+file.name+'. Автоматическое распознавание ещё не подключено.';
+}
+document.getElementById('camera').addEventListener('change',selectPhoto);
+document.getElementById('gallery').addEventListener('change',selectPhoto);
+
+function addRow(vals=['','','','']){
+ const tr=document.createElement('tr');
+ for(let i=0;i<4;i++){
+  const td=document.createElement('td');
+  const input=document.createElement('input');
+  input.value=String(vals[i]??'');
+  input.setAttribute('aria-label',['ЦП','Номер чертежа','Количество деталей','Подпись или дата'][i]);
+  td.append(input);
+  tr.append(td);
+ }
+ const td=document.createElement('td');
+ const del=document.createElement('button');
+ del.textContent='×';
+ del.className='secondary';
+ del.style.padding='7px';
+ del.setAttribute('aria-label','Удалить строку');
+ del.onclick=()=>tr.remove();
+ td.append(del);
+ tr.append(td);
+ tbody.append(tr);
+}
+
+function showRows(rows,hint){
+ tbody.innerHTML='';
+ rows.forEach(addRow);
+ document.getElementById('resultsHint').textContent=hint;
+ results.classList.remove('hidden');
+ results.scrollIntoView({behavior:'smooth'});
+}
+
+function parseOverlay(data){
+ const lines=data?.ParsedResults?.[0]?.Overlay?.Lines;
+ if(!Array.isArray(lines)||!lines.length)
+  throw new Error('В файле отсутствуют координаты Overlay.Lines. Нужен JSON с OCR.space Engine 3.');
+
+ const words=[];
+ for(const line of lines){
+  for(const w of line.Words||[]){
+   const x=Number(w.Left),y=Number(w.Top),h=Number(w.Height);
+   if(w.WordText!=null&&String(w.WordText).trim()&&Number.isFinite(x)&&Number.isFinite(y)){
+    words.push({
+     text:String(w.WordText).trim(),
+     x,y,h:Number.isFinite(h)&&h>0?h:20
+    });
+   }
+  }
+ }
+ if(!words.length)throw new Error('В JSON нет распознанных слов.');
+
+ words.sort((a,b)=>a.y-b.y||a.x-b.x);
+ const heights=words.map(w=>w.h).sort((a,b)=>a-b);
+ const tolerance=Math.max(10,Math.min(22,heights[Math.floor(heights.length/2)]*0.65));
+
+ const grouped=[];
+ for(const word of words){
+  let row=grouped.find(r=>Math.abs(r.y-word.y)<=tolerance);
+  if(!row){
+   row={y:word.y,words:[]};
+   grouped.push(row);
+  }
+  row.words.push(word);
+ }
+ grouped.sort((a,b)=>a.y-b.y);
+ grouped.forEach(r=>r.words.sort((a,b)=>a.x-b.x));
+
+ const header=grouped.find(r=>r.words.map(w=>w.text).join(' ').toLowerCase().includes('чертеж'));
+ const startY=header?header.y+tolerance:-Infinity;
+
+ const rows=[];
+ for(const row of grouped){
+  if(row.y<=startY)continue;
+  const cols=[[],[],[],[]];
+  for(const w of row.words){
+   const c=w.x<310?0:w.x<780?1:w.x<1000?2:3;
+   cols[c].push(w.text);
+  }
+  if(!cols.some(c=>c.length))continue;
+  if(cols.flat().join(' ').toLowerCase().includes('чертеж'))continue;
+  rows.push(cols.map(c=>c.join(' ')));
+ }
+ if(!rows.length)throw new Error('Не удалось выделить строки таблицы.');
+ return rows;
+}
+
+document.getElementById('jsonFile').addEventListener('change',async e=>{
+ const file=e.target.files?.[0];
+ if(!file)return;
+ try{
+  const data=JSON.parse(await file.text());
+  const rows=parseOverlay(data);
+  showRows(rows,'Данные распознаны OCR.space. Проверьте каждую строку и исправьте возможные ошибки.');
+  ocrStatus.textContent='Загружено строк: '+rows.length+'. Файл: '+file.name;
+ }catch(err){
+  ocrStatus.textContent='Ошибка: '+err.message;
+ }
+});
+
+document.getElementById('sample').onclick=()=>{
+ showRows([
+  ['16','ТЕСТ-6116-100-11','15',''],
+  ['95','ТЕСТ-8705-000-003','6',''],
+  ['146','ТЕСТ-5103-381','24','']
+ ],'Это вымышленные тестовые записи, не результат распознавания.');
+ ocrStatus.textContent='Показан тестовый пример.';
+};
+
+document.getElementById('add').onclick=()=>addRow();
+
+document.getElementById('export').onclick=()=>{
+ const lines=[['ЦП','Номер чертежа','Количество деталей','Подпись кладовщика, дата']];
+ for(const tr of tbody.querySelectorAll('tr')){
+  lines.push([...tr.querySelectorAll('input')].map(x=>x.value));
+ }
+ if(lines.length===1){
+  alert('Сначала загрузите JSON-файл или добавьте строки.');
+  return;
+ }
+ const quote=s=>'"'+String(s).replaceAll('"','""')+'"';
+ const csv='\ufeff'+lines.map(row=>row.map(quote).join(';')).join('\r\n');
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+ const a=document.createElement('a');
+ const u=URL.createObjectURL(blob);
+ a.href=u;
+ a.download='sutochny_rapport.csv';
+ document.body.append(a);
+ a.click();
+ a.remove();
+ setTimeout(()=>URL.revokeObjectURL(u),1000);
+};
+</script>
+</body>
+</html>
