@@ -153,6 +153,15 @@ document.getElementById('recognize').onclick=async()=>{
   }
 
   const data=await response.json();
+  console.log('Ответ OCR.space:', data);
+alert('Ответ OCR.space: '+JSON.stringify({
+  ErrorMessage:data.ErrorMessage,
+  OCRExitCode:data.OCRExitCode,
+  ParsedResults:data.ParsedResults?.map(r=>({
+    ParsedText:r.ParsedText,
+    Overlay:r.Overlay ? 'Есть' : 'Нет'
+  }))
+},null,2));
 
   if(data.IsErroredOnProcessing){
    throw new Error(
